@@ -26,7 +26,7 @@ RUN python -m pip install --no-cache-dir -r /tmp/requirements-docker.txt \
     && python -c "import torch; torch.hub.load('/opt/dinov2', 'dinov2_vits14', source='local')"
 
 WORKDIR /app
-COPY app.py embedding.py search_catalog.py coin_crop.py index.html ./
+COPY app.py build_catalog.py embedding.py search_catalog.py coin_crop.py index.html ./
 COPY artifacts/catalog2.pt ./artifacts/catalog2.pt
 
 RUN useradd --create-home --uid 10001 appuser \
