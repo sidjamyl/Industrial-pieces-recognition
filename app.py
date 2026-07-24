@@ -3,6 +3,7 @@ import cgi
 import io
 import json
 import os
+import shutil
 import threading
 from uuid import uuid4
 import webbrowser
@@ -12,9 +13,11 @@ from urllib.parse import parse_qs, urlparse
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from build_catalog import IMAGE_EXTENSIONS, build, catalog_images
+import torch
+
+from build_catalog import IMAGE_EXTENSIONS
 from coin_crop import find_coin_box
-from embedding import DEVICE, embed_tensors, prepare_full_image
+from embedding import DEVICE, embed_crops, embed_tensors, prepare_full_image
 from search_catalog import load_catalog, rank_embeddings
 
 
@@ -25,8 +28,8 @@ CATALOG_PATH = Path(
 PAGE_PATH = ROOT / "index.html"
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 ADMIN_MAX_UPLOAD_BYTES = 200 * 1024 * 1024
-CATALOG_DATA_PATH = Path(
-    os.environ.get("CATALOG_DATA_PATH", ROOT / "data" / "catalog 2")
+PENDING_DATA_PATH = Path(
+    os.environ.get("PENDING_DATA_PATH", ROOT / "data" / "pending")
 )
 CATALOG = load_catalog(CATALOG_PATH)
 ADMIN_LOCK = threading.Lock()
@@ -74,8 +77,8 @@ def catalog_overview() -> dict:
         indexed[item["reference"]] = indexed.get(item["reference"], 0) + 1
 
     source = {}
-    if CATALOG_DATA_PATH.is_dir():
-        for directory in CATALOG_DATA_PATH.iterdir():
+    if PENDING_DATA_PATH.is_dir():
+        for directory in PENDING_DATA_PATH.iterdir():
             if directory.is_dir():
                 source[directory.name] = sum(
                     path.suffix.lower() in IMAGE_EXTENSIONS
@@ -88,7 +91,7 @@ def catalog_overview() -> dict:
             "name": reference,
             "source_images": source.get(reference, 0),
             "indexed_images": indexed.get(reference, 0),
-            "pending": source.get(reference, 0) != indexed.get(reference, 0),
+            "pending": source.get(reference, 0) > 0,
         }
         for reference in sorted(set(source) | set(indexed))
     ]
@@ -104,6 +107,14 @@ def rebuild_status() -> dict:
         return dict(ADMIN_REBUILD)
 
 
+def pending_images() -> list[Path]:
+    return sorted(
+        path
+        for path in PENDING_DATA_PATH.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+    )
+
+
 def rebuild_catalog() -> None:
     global CATALOG
     temporary_path = CATALOG_PATH.with_suffix(".next.pt")
@@ -114,13 +125,43 @@ def rebuild_catalog() -> None:
             ADMIN_REBUILD["total"] = total
 
     try:
-        total = len(catalog_images(CATALOG_DATA_PATH))
+        files = pending_images()
+        if not files:
+            return
         with ADMIN_LOCK:
-            ADMIN_REBUILD.update(processed=0, total=total, error=None)
-        build(CATALOG_DATA_PATH, temporary_path, batch_size=16, progress=update_progress)
+            ADMIN_REBUILD.update(processed=0, total=len(files), error=None)
+
+        embeddings = []
+        for start in range(0, len(files), 16):
+            batch_paths = files[start : start + 16]
+            images = []
+            for path in batch_paths:
+                with Image.open(path) as image:
+                    images.append(image.convert("RGB"))
+            embeddings.append(embed_crops(images))
+            update_progress(min(start + 16, len(files)), len(files))
+
+        new_items = [
+            {
+                "reference": path.relative_to(PENDING_DATA_PATH).parts[0],
+                "specimen": "admin",
+                "side": "vue",
+                "image_path": "",
+            }
+            for path in files
+        ]
+        torch.save(
+            {
+                **CATALOG,
+                "embeddings": torch.cat([CATALOG["embeddings"], *embeddings]),
+                "items": [*CATALOG["items"], *new_items],
+            },
+            temporary_path,
+        )
         rebuilt_catalog = load_catalog(temporary_path)
         temporary_path.replace(CATALOG_PATH)
         CATALOG = rebuilt_catalog
+        shutil.rmtree(PENDING_DATA_PATH, ignore_errors=True)
     except Exception as error:
         temporary_path.unlink(missing_ok=True)
         with ADMIN_LOCK:
@@ -158,7 +199,7 @@ def save_reference(form: cgi.FieldStorage) -> tuple[str, int]:
     if not images or not all(getattr(image, "file", None) for image in images):
         raise ValueError("Ajoutez au moins une photo.")
 
-    destination = CATALOG_DATA_PATH / reference
+    destination = PENDING_DATA_PATH / reference
     destination.mkdir(parents=True, exist_ok=True)
     saved = 0
     for field in images:

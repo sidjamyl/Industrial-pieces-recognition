@@ -113,8 +113,9 @@ The production interface is now in `frontend/`.
   the API container address.
 
 Adding photos does not change recognition immediately: use **Reconstruire
-maintenant** in `/admin` once the reference is complete. The running API swaps
-to the rebuilt catalog only when the build succeeds.
+maintenant** in `/admin` once the reference is complete. Only those new photos
+are embedded and appended to `catalog2.pt`; the original catalog photos are
+not required on the server.
 
 > `/admin` has **no authentication yet**. Do not expose it publicly until an
 > authentication layer is added.
@@ -136,20 +137,13 @@ The deployment contains two services:
 - `web`: standalone Next.js server;
 - `api`: Python, OpenCV, DINOv2 ViT-S/14, the catalog and CPU PyTorch.
 
-The first build downloads the CPU PyTorch packages, the official DINOv2
-repository and the ViT-S/14 weights. It can therefore take several minutes.
-
-Copy the complete project to a Linux VPS. In particular, keep:
-
-- `artifacts/catalog2.pt`;
-- `data/catalog 2/`;
-- `frontend/package-lock.json`.
-
-Then run:
+The ready-to-run public images are available on Docker Hub. Copy only
+`docker-compose.yml` and `.env.example` to the VPS, then run:
 
 ```bash
 cp .env.example .env
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose ps
 docker compose logs -f api web
 ```
@@ -171,15 +165,17 @@ Useful operations:
 # Health from the VPS
 curl http://127.0.0.1:3000/api/health
 
-# Restart after replacing catalog2.pt or the source catalog
-docker compose up -d --build api
+# Upgrade to the latest published images
+docker compose pull
+docker compose up -d
 
 # Stop without deleting images
 docker compose down
 ```
 
-Compose keeps `data/catalog 2` and `artifacts` in named Docker volumes, so
-photos added through `/admin` and rebuilt catalogs survive a container restart.
+Compose keeps the pending admin uploads and `catalog2.pt` in named Docker
+volumes. A successful admin rebuild appends the new embeddings to the catalog,
+then removes the temporary uploaded photos.
 
 The current image targets a CPU VPS and makes no latency guarantee. DINOv2 is
 still used for every uploaded photo; only the reference embeddings are

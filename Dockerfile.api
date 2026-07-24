@@ -28,7 +28,6 @@ RUN python -m pip install --no-cache-dir -r /tmp/requirements-docker.txt \
 WORKDIR /app
 COPY app.py embedding.py search_catalog.py coin_crop.py index.html ./
 COPY artifacts/catalog2.pt ./artifacts/catalog2.pt
-COPY ["data/catalog 2", "./data/catalog 2"]
 
 RUN useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app /opt/torch-cache /opt/dinov2

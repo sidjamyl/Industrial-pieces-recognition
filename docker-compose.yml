@@ -1,5 +1,6 @@
 services:
   api:
+    image: ${DOCKERHUB_NAMESPACE:-sidjamyl}/industrial-pieces-recognition-api:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -7,7 +8,7 @@ services:
     expose:
       - "8000"
     volumes:
-      - catalog_data:/app/data/catalog 2
+      - catalog_data:/app/data/pending
       - catalog_artifacts:/app/artifacts
     healthcheck:
       test:
@@ -23,6 +24,7 @@ services:
       retries: 3
 
   web:
+    image: ${DOCKERHUB_NAMESPACE:-sidjamyl}/industrial-pieces-recognition-web:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
