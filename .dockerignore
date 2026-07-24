@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+frontend/.next
+frontend/node_modules
+data/*
+!data/catalog 2/
+!data/catalog 2/**
+artifacts/*
+!artifacts/catalog2.pt

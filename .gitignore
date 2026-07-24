@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+data/
+artifacts/*
+!artifacts/catalog2.pt
+frontend/node_modules/
+frontend/.next/
+frontend/*.tsbuildinfo

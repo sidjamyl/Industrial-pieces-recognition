@@ -1,0 +1,42 @@
+FROM python:3.12-slim
+
+ARG TORCH_VERSION=2.12.0
+ARG TORCHVISION_VERSION=0.27.0
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TORCH_HOME=/opt/torch-cache \
+    DINOV2_REPO=/opt/dinov2 \
+    HOST=0.0.0.0 \
+    PORT=8000 \
+    NO_BROWSER=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m pip install --no-cache-dir \
+      --index-url https://download.pytorch.org/whl/cpu \
+      "torch==${TORCH_VERSION}" "torchvision==${TORCHVISION_VERSION}"
+
+COPY requirements-docker.txt /tmp/requirements-docker.txt
+RUN python -m pip install --no-cache-dir -r /tmp/requirements-docker.txt \
+    && git clone --depth 1 https://github.com/facebookresearch/dinov2.git /opt/dinov2 \
+    && python -c "import torch; torch.hub.load('/opt/dinov2', 'dinov2_vits14', source='local')"
+
+WORKDIR /app
+COPY app.py embedding.py search_catalog.py coin_crop.py index.html ./
+COPY artifacts/catalog2.pt ./artifacts/catalog2.pt
+COPY ["data/catalog 2", "./data/catalog 2"]
+
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app /opt/torch-cache /opt/dinov2
+
+USER appuser
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+
+CMD ["python", "app.py"]

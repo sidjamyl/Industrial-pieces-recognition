@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+:root {
+  --canvas: #f5f4f0;
+  --surface: #ffffff;
+  --surface-soft: #f0efeb;
+  --ink: #14212c;
+  --ink-soft: #243746;
+  --muted: #66717a;
+  --line: rgba(20, 33, 44, 0.11);
+  --accent: #315a78;
+  --accent-soft: #dce8ef;
+  --success: #177251;
+  --danger: #a73d38;
+  --focus: #557f9d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 16% -10%, rgba(203, 220, 230, 0.7), transparent 32rem),
+    var(--canvas);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: rgba(49, 90, 120, 0.18);
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.ambient-orb {
+  position: fixed;
+  top: -18rem;
+  right: -13rem;
+  z-index: 0;
+  width: min(54rem, 90vw);
+  height: 54rem;
+  overflow: hidden;
+  border-radius: 50%;
+  opacity: 0.32;
+  filter: saturate(0.7);
+  mask-image: radial-gradient(circle, black 30%, transparent 72%);
+  pointer-events: none;
+}
+
+.glass-panel {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 1px 1px rgba(20, 33, 44, 0.035),
+    0 24px 80px rgba(20, 33, 44, 0.09);
+  backdrop-filter: blur(28px) saturate(1.12);
+}
+
+.fine-grid {
+  background-image:
+    linear-gradient(rgba(20, 33, 44, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 33, 44, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .ambient-orb {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-panel {
+    background: #fff;
+    backdrop-filter: none;
+  }
+}

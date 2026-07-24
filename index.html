@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reconnaissance de pièces</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: oklch(1 0 0);
+      --surface: oklch(0.965 0.004 340);
+      --ink: oklch(0.18 0.018 340);
+      --muted: oklch(0.45 0.018 340);
+      --line: oklch(0.88 0.009 340);
+      --primary: oklch(0.36 0.147 340);
+      --primary-hover: oklch(0.31 0.14 340);
+      --accent: oklch(0.62 0.15 155);
+      --danger: oklch(0.52 0.19 25);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); }
+    button, input { font: inherit; }
+    button:focus-visible, label:focus-within { outline: 3px solid oklch(0.72 0.12 340 / 0.5); outline-offset: 3px; }
+    header { height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 40px; border-bottom: 1px solid var(--line); }
+    .brand { font-weight: 760; letter-spacing: -0.02em; }
+    .status { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 0.86rem; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+    main { min-height: calc(100vh - 72px); display: grid; grid-template-columns: minmax(360px, 1.08fr) minmax(380px, 0.92fr); }
+    .image-side { padding: 40px; background: var(--surface); border-right: 1px solid var(--line); }
+    .result-side { padding: 48px; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+    .drop-zone { min-height: 560px; display: grid; place-items: center; position: sticky; top: 24px; overflow: hidden; border: 1px dashed oklch(0.7 0.035 340); border-radius: 14px; background: var(--bg); cursor: pointer; transition: border-color 180ms ease, background 180ms ease; }
+    .drop-zone:hover, .drop-zone.dragging { border-color: var(--primary); background: oklch(0.98 0.008 340); }
+    .drop-zone.has-image { border-style: solid; background: oklch(0.12 0 0); }
+    .drop-zone.reviewing { cursor: default; }
+    .drop-zone input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .empty { max-width: 350px; padding: 32px; text-align: center; }
+    .empty svg { width: 34px; margin-bottom: 18px; color: var(--primary); }
+    .empty strong { display: block; margin-bottom: 8px; font-size: 1.08rem; }
+    .empty span, .intro, .result-note, .margin, .disclaimer, .lesson-copy { color: var(--muted); line-height: 1.55; }
+    #preview { display: none; width: 100%; height: 560px; object-fit: contain; }
+    .crop-overlay {
+      display: none;
+      position: absolute;
+      border: 2px solid white;
+      border-radius: 8px;
+      box-shadow: 0 0 0 2000px oklch(0 0 0 / 0.55);
+      cursor: move;
+      touch-action: none;
+    }
+    .crop-overlay.visible { display: block; }
+    .crop-handle {
+      position: absolute;
+      right: -12px;
+      bottom: -12px;
+      width: 24px;
+      height: 24px;
+      border: 3px solid white;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: nwse-resize;
+    }
+
+    .section-label { color: var(--primary); font-weight: 700; font-size: 0.84rem; margin-bottom: 14px; }
+    h1 { margin: 0; max-width: 560px; font-size: 2rem; line-height: 1.16; letter-spacing: -0.03em; }
+    .intro { max-width: 58ch; margin: 18px 0 30px; }
+    .primary-button, .quiet-button { min-height: 44px; width: fit-content; border-radius: 9px; padding: 0 18px; font-weight: 700; cursor: pointer; }
+    .primary-button { border: 0; background: var(--primary); color: white; }
+    .primary-button:hover { background: var(--primary-hover); }
+    .primary-button:disabled { cursor: wait; opacity: 0.62; }
+    .quiet-button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+    .quiet-button:disabled { opacity: 0.4; cursor: default; }
+
+    #cropReview, #result { display: none; }
+    .crop-status { display: flex; align-items: flex-start; gap: 10px; margin: 20px 0 26px; color: var(--muted); line-height: 1.5; }
+    .crop-status::before { content: ""; width: 9px; height: 9px; margin-top: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--accent); }
+    .button-row { display: flex; flex-wrap: wrap; gap: 10px; }
+    .winner { margin: 4px 0 8px; font-size: 3rem; line-height: 1; letter-spacing: -0.04em; }
+    .result-note { margin: 0 0 24px; }
+    .ranking { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+    .ranking li { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; padding: 15px 0; border-bottom: 1px solid var(--line); align-items: center; }
+    .rank, .score { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .reference { font-weight: 680; }
+    .margin { margin: 18px 0 22px; font-size: 0.88rem; }
+    .disclaimer { margin: 20px 0 0; max-width: 58ch; font-size: 0.82rem; }
+    .error { display: none; margin-top: 20px; color: var(--danger); font-weight: 650; }
+
+    .mode-row { margin: 26px 0 0; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .mode-row strong { display: block; font-size: 0.94rem; }
+    .mode-row small { display: block; margin-top: 4px; color: var(--muted); }
+    .switch { position: relative; width: 48px; height: 28px; flex: 0 0 auto; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch span { position: absolute; inset: 0; border-radius: 20px; background: var(--line); transition: background 160ms ease; }
+    .switch span::after { content: ""; position: absolute; width: 22px; height: 22px; left: 3px; top: 3px; border-radius: 50%; background: white; box-shadow: 0 1px 4px oklch(0 0 0 / .2); transition: transform 160ms ease; }
+    .switch input:checked + span { background: var(--primary); }
+    .switch input:checked + span::after { transform: translateX(20px); }
+
+    #pedagogy { display: none; margin-top: 30px; }
+    #pedagogy.visible { display: block; }
+    .step-tabs { display: flex; gap: 7px; margin-bottom: 22px; }
+    .step-tab { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 50%; background: var(--bg); color: var(--muted); cursor: pointer; font-weight: 700; }
+    .step-tab.active { border-color: var(--primary); background: var(--primary); color: white; }
+    .lesson { display: none; min-height: 330px; }
+    .lesson.active { display: block; }
+    .lesson-kicker { color: var(--primary); font-size: .78rem; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
+    .lesson h2 { margin: 8px 0 8px; font-size: 1.35rem; letter-spacing: -.02em; }
+    .lesson-copy { margin: 0 0 18px; max-width: 58ch; font-size: .92rem; }
+    .lesson-image { display: block; width: min(100%, 360px); height: 230px; object-fit: contain; border-radius: 10px; background: oklch(.12 0 0); }
+    .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .fact { padding: 8px 10px; border-radius: 7px; background: var(--surface); color: var(--muted); font: 600 .78rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+    #embeddingCanvas { width: 100%; height: 190px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+    .vector-values { overflow-wrap: anywhere; font: .76rem/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--muted); }
+    .neighbors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .neighbor { min-width: 0; }
+    .neighbor img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--surface); }
+    .neighbor strong, .neighbor small { display: block; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .neighbor small { color: var(--muted); font-size: .73rem; }
+    .formula { margin-top: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: .86rem/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .lesson-nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; }
+
+    .loading h1 { color: var(--muted); }
+    .loading-line { display: none; width: 100%; height: 3px; margin-top: 28px; overflow: hidden; background: var(--surface); }
+    .loading .loading-line { display: block; }
+    .loading-line::after { content: ""; display: block; width: 42%; height: 100%; background: var(--primary); animation: load 1s ease-in-out infinite alternate; }
+    @keyframes load { from { transform: translateX(-30%); } to { transform: translateX(170%); } }
+
+    @media (max-width: 840px) {
+      header { padding: 0 20px; }
+      .status span:last-child { display: none; }
+      main { grid-template-columns: 1fr; }
+      .image-side { padding: 20px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .drop-zone { position: relative; top: auto; }
+      .drop-zone, #preview { min-height: 360px; height: 360px; }
+      .result-side { padding: 40px 24px 56px; }
+      .winner { font-size: 2.5rem; }
+    }
+    @media (max-width: 460px) {
+      .neighbors { grid-template-columns: 1fr; }
+      .neighbor { display: grid; grid-template-columns: 82px 1fr; gap: 10px; align-items: center; }
+      .neighbor img { grid-row: span 2; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Reconnaissance de pièces</div>
+    <div class="status"><span class="status-dot"></span><span>DINOv2 prêt</span><span>· __CATALOG_SIZE__ images catalogue</span></div>
+  </header>
+
+  <main>
+    <section class="image-side">
+      <label class="drop-zone" id="dropZone" for="imageInput">
+        <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp">
+        <div class="empty" id="emptyState">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+          <strong>Dépose une photo ici</strong>
+          <span>ou clique pour choisir une image JPEG, PNG ou WebP de moins de 20 Mo.</span>
+        </div>
+        <img id="preview" alt="Aperçu de la pièce sélectionnée">
+        <div class="crop-overlay" id="cropOverlay" aria-label="Zone de recadrage ajustable">
+          <span class="crop-handle" data-resize="true" aria-hidden="true"></span>
+        </div>
+      </label>
+    </section>
+
+    <section class="result-side" id="resultSide">
+      <div id="idle">
+        <div class="section-label">Test du catalogue</div>
+        <h1>Identifie une pièce à partir d’une seule photo.</h1>
+        <p class="intro">Choisis une image où la pièce est visible. Le modèle la comparera aux références 5 DA, 50 DA et 200 DA.</p>
+        <button class="primary-button" id="chooseButton" type="button">Choisir une image</button>
+      </div>
+
+      <div id="cropReview">
+        <div class="section-label">Validation du recadrage</div>
+        <h1>La pièce est-elle entièrement dans le cadre&nbsp;?</h1>
+        <p class="intro">Déplace le carré sur la pièce et utilise la poignée en bas à droite pour changer sa taille. Garde une petite marge autour de l’objet.</p>
+        <p class="crop-status" id="cropStatus"></p>
+        <div class="button-row">
+          <button class="primary-button" id="confirmCropButton" type="button">Confirmer et analyser</button>
+          <button class="quiet-button" id="changeImageButton" type="button">Changer d’image</button>
+        </div>
+      </div>
+
+      <div id="result" aria-live="polite">
+        <div class="section-label">Meilleur candidat</div>
+        <h1 class="winner" id="winner"></h1>
+        <p class="result-note">Classement des références les plus proches</p>
+        <ol class="ranking" id="ranking"></ol>
+        <p class="margin" id="margin"></p>
+        <button class="primary-button" id="retryButton" type="button">Tester une autre image</button>
+        <p class="disclaimer">Les scores mesurent une similarité visuelle et ne sont pas des probabilités. Avec des recadrages validés, le prototype obtient 91,26 % sur 103 images de test.</p>
+
+        <div class="mode-row">
+          <div><strong>Mode pédagogique</strong><small>Voir ce que le modèle fait réellement</small></div>
+          <label class="switch" aria-label="Afficher le mode pédagogique">
+            <input id="pedagogyToggle" type="checkbox" checked><span></span>
+          </label>
+        </div>
+
+        <section id="pedagogy" aria-label="Étapes du traitement">
+          <div class="step-tabs" id="stepTabs"></div>
+
+          <article class="lesson" data-step="0">
+            <div class="lesson-kicker">Étape 1 sur 5</div>
+            <h2>La photo originale</h2>
+            <p class="lesson-copy">C’est le fichier envoyé. Sa résolution peut être grande, mais DINOv2 ne le lit pas directement sous cette forme.</p>
+            <img class="lesson-image" id="originalLesson" alt="Photo originale envoyée">
+            <div class="facts"><span class="fact" id="sourceSize"></span></div>
+          </article>
+
+          <article class="lesson" data-step="1">
+            <div class="lesson-kicker">Étape 2 sur 5</div>
+            <h2>La zone validée envoyée à DINOv2</h2>
+            <p class="lesson-copy">La zone proposée automatiquement a été vérifiée ou corrigée avant l’analyse, puis transformée en carré de 224 × 224.</p>
+            <img class="lesson-image" id="cropLesson" alt="Découpe centrale reçue par DINOv2">
+            <div class="facts"><span class="fact" id="cropSize"></span></div>
+          </article>
+
+          <article class="lesson" data-step="2">
+            <div class="lesson-kicker">Étape 3 sur 5</div>
+            <h2>Les pixels deviennent un tenseur</h2>
+            <p class="lesson-copy">Les couleurs rouge, verte et bleue deviennent trois grilles de nombres. Elles sont normalisées pour correspondre aux données utilisées pour préparer DINOv2.</p>
+            <div class="facts" id="tensorFacts"></div>
+          </article>
+
+          <article class="lesson" data-step="3">
+            <div class="lesson-kicker">Étape 4 sur 5</div>
+            <h2>L’image devient un embedding de 384 nombres</h2>
+            <p class="lesson-copy">Chaque barre représente une valeur. Seule, une valeur n’a pas un sens simple : ensemble, les 384 nombres décrivent l’apparence visuelle de l’image.</p>
+            <canvas id="embeddingCanvas" width="720" height="190" aria-label="Visualisation des 384 valeurs de l’embedding"></canvas>
+            <div class="facts" id="embeddingFacts"></div>
+            <p class="vector-values" id="vectorValues"></p>
+          </article>
+
+          <article class="lesson" data-step="4">
+            <div class="lesson-kicker">Étape 5 sur 5</div>
+            <h2>Les voisins décident du résultat</h2>
+            <p class="lesson-copy">Pour chaque référence, on cherche ses trois photos les plus similaires. Leur moyenne donne le score de la référence. La meilleure moyenne gagne.</p>
+            <div class="neighbors" id="neighbors"></div>
+            <div class="formula" id="formula"></div>
+          </article>
+
+          <nav class="lesson-nav" aria-label="Navigation entre les étapes">
+            <button class="quiet-button" id="previousStep" type="button">← Précédent</button>
+            <button class="quiet-button" id="nextStep" type="button">Suivant →</button>
+          </nav>
+        </section>
+      </div>
+
+      <p class="error" id="error" role="alert"></p>
+      <div class="loading-line" aria-hidden="true"></div>
+    </section>
+  </main>
+
+  <script>
+    const input = document.querySelector('#imageInput');
+    const dropZone = document.querySelector('#dropZone');
+    const preview = document.querySelector('#preview');
+    const emptyState = document.querySelector('#emptyState');
+    const idle = document.querySelector('#idle');
+    const result = document.querySelector('#result');
+    const resultSide = document.querySelector('#resultSide');
+    const error = document.querySelector('#error');
+    const chooseButton = document.querySelector('#chooseButton');
+    const retryButton = document.querySelector('#retryButton');
+    const cropReview = document.querySelector('#cropReview');
+    const cropOverlay = document.querySelector('#cropOverlay');
+    const cropStatus = document.querySelector('#cropStatus');
+    const confirmCropButton = document.querySelector('#confirmCropButton');
+    const changeImageButton = document.querySelector('#changeImageButton');
+    const pedagogy = document.querySelector('#pedagogy');
+    const pedagogyToggle = document.querySelector('#pedagogyToggle');
+    const lessons = [...document.querySelectorAll('.lesson')];
+    let currentStep = 0;
+    let originalUrl = '';
+    let currentFile = null;
+    let imageSize = [0, 0];
+    let cropBox = null;
+    let dragState = null;
+
+    document.querySelector('#stepTabs').innerHTML = lessons.map((_, index) =>
+      `<button class="step-tab" type="button" data-target="${index}" aria-label="Étape ${index + 1}">${index + 1}</button>`
+    ).join('');
+    const tabs = [...document.querySelectorAll('.step-tab')];
+
+    function showStep(index) {
+      currentStep = Math.max(0, Math.min(lessons.length - 1, index));
+      lessons.forEach((lesson, i) => lesson.classList.toggle('active', i === currentStep));
+      tabs.forEach((tab, i) => {
+        tab.classList.toggle('active', i === currentStep);
+        tab.setAttribute('aria-current', i === currentStep ? 'step' : 'false');
+      });
+      document.querySelector('#previousStep').disabled = currentStep === 0;
+      document.querySelector('#nextStep').disabled = currentStep === lessons.length - 1;
+    }
+    tabs.forEach(tab => tab.addEventListener('click', () => showStep(Number(tab.dataset.target))));
+    document.querySelector('#previousStep').addEventListener('click', () => showStep(currentStep - 1));
+    document.querySelector('#nextStep').addEventListener('click', () => showStep(currentStep + 1));
+    pedagogyToggle.addEventListener('change', () => pedagogy.classList.toggle('visible', pedagogyToggle.checked));
+
+    function openPicker() {
+      input.value = '';
+      input.click();
+    }
+    chooseButton.addEventListener('click', openPicker);
+    retryButton.addEventListener('click', openPicker);
+    changeImageButton.addEventListener('click', openPicker);
+    confirmCropButton.addEventListener('click', analyzeCrop);
+    input.addEventListener('change', () => input.files[0] && prepareCrop(input.files[0]));
+    dropZone.addEventListener('click', event => {
+      if (currentFile && event.target !== input) event.preventDefault();
+    });
+    ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => {
+      event.preventDefault();
+      dropZone.classList.add('dragging');
+    }));
+    ['dragleave', 'drop'].forEach(type => dropZone.addEventListener(type, event => {
+      event.preventDefault();
+      dropZone.classList.remove('dragging');
+    }));
+    dropZone.addEventListener('drop', event => {
+      const file = event.dataTransfer.files[0];
+      if (file) prepareCrop(file);
+    });
+
+    function displayGeometry() {
+      const scale = Math.min(
+        preview.clientWidth / imageSize[0],
+        preview.clientHeight / imageSize[1]
+      );
+      return {
+        scale,
+        left: preview.offsetLeft + (preview.clientWidth - imageSize[0] * scale) / 2,
+        top: preview.offsetTop + (preview.clientHeight - imageSize[1] * scale) / 2
+      };
+    }
+
+    function updateOverlay() {
+      if (!cropBox || !imageSize[0]) return;
+      const geometry = displayGeometry();
+      cropOverlay.style.left = `${geometry.left + cropBox.x * geometry.scale}px`;
+      cropOverlay.style.top = `${geometry.top + cropBox.y * geometry.scale}px`;
+      cropOverlay.style.width = `${cropBox.size * geometry.scale}px`;
+      cropOverlay.style.height = `${cropBox.size * geometry.scale}px`;
+    }
+
+    cropOverlay.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const geometry = displayGeometry();
+      dragState = {
+        startX: event.clientX,
+        startY: event.clientY,
+        box: { ...cropBox },
+        scale: geometry.scale,
+        resize: Boolean(event.target.dataset.resize)
+      };
+      cropOverlay.setPointerCapture(event.pointerId);
+    });
+
+    cropOverlay.addEventListener('pointermove', event => {
+      if (!dragState) return;
+      const dx = (event.clientX - dragState.startX) / dragState.scale;
+      const dy = (event.clientY - dragState.startY) / dragState.scale;
+      if (dragState.resize) {
+        const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+        const minimum = Math.max(64, Math.min(...imageSize) * 0.08);
+        const maximum = Math.min(
+          imageSize[0] - dragState.box.x,
+          imageSize[1] - dragState.box.y
+        );
+        cropBox.size = Math.round(Math.max(minimum, Math.min(maximum, dragState.box.size + delta)));
+      } else {
+        cropBox.x = Math.round(Math.max(0, Math.min(
+          imageSize[0] - cropBox.size,
+          dragState.box.x + dx
+        )));
+        cropBox.y = Math.round(Math.max(0, Math.min(
+          imageSize[1] - cropBox.size,
+          dragState.box.y + dy
+        )));
+      }
+      updateOverlay();
+    });
+
+    cropOverlay.addEventListener('pointerup', event => {
+      dragState = null;
+      cropOverlay.releasePointerCapture(event.pointerId);
+    });
+    window.addEventListener('resize', updateOverlay);
+
+    async function prepareCrop(file) {
+      currentFile = file;
+      error.style.display = 'none';
+      result.style.display = 'none';
+      cropReview.style.display = 'none';
+      idle.style.display = 'block';
+      cropOverlay.classList.remove('visible');
+      resultSide.classList.add('loading');
+      chooseButton.disabled = true;
+      chooseButton.textContent = 'Recherche de la pièce…';
+
+      if (originalUrl) URL.revokeObjectURL(originalUrl);
+      originalUrl = URL.createObjectURL(file);
+      await new Promise(resolve => {
+        preview.onload = resolve;
+        preview.src = originalUrl;
+      });
+      preview.style.display = 'block';
+      emptyState.style.display = 'none';
+      dropZone.classList.add('has-image', 'reviewing');
+
+      const form = new FormData();
+      form.append('image', file);
+      try {
+        const response = await fetch('/detect', { method: 'POST', body: form });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Détection impossible.');
+        imageSize = data.image_size;
+        cropBox = {
+          x: data.box[0],
+          y: data.box[1],
+          size: Math.min(data.box[2] - data.box[0], data.box[3] - data.box[1])
+        };
+        cropStatus.textContent = data.detected
+          ? 'Une zone a été proposée automatiquement. Vérifie que toute la pièce est visible.'
+          : 'Détection incertaine : une zone centrale est proposée. Ajuste-la manuellement.';
+        idle.style.display = 'none';
+        cropReview.style.display = 'block';
+        cropOverlay.classList.add('visible');
+        updateOverlay();
+      } catch (problem) {
+        error.textContent = problem.message;
+        error.style.display = 'block';
+      } finally {
+        resultSide.classList.remove('loading');
+        chooseButton.disabled = false;
+        chooseButton.textContent = 'Choisir une image';
+      }
+    }
+
+    function drawEmbedding(values) {
+      const canvas = document.querySelector('#embeddingCanvas');
+      const context = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      const middle = height / 2;
+      const barWidth = width / values.length;
+      const max = Math.max(...values.map(Math.abs)) || 1;
+      context.clearRect(0, 0, width, height);
+      context.strokeStyle = '#cfc6cc';
+      context.beginPath();
+      context.moveTo(0, middle);
+      context.lineTo(width, middle);
+      context.stroke();
+      values.forEach((value, index) => {
+        const barHeight = Math.abs(value) / max * (middle - 10);
+        context.fillStyle = value >= 0 ? '#75305f' : '#4c8b69';
+        context.fillRect(index * barWidth, value >= 0 ? middle - barHeight : middle, Math.max(1, barWidth), barHeight);
+      });
+    }
+
+    function fillPedagogy(data) {
+      const p = data.pedagogy;
+      document.querySelector('#originalLesson').src = originalUrl;
+      document.querySelector('#sourceSize').textContent = `${p.source_size[0]} × ${p.source_size[1]} pixels`;
+      document.querySelector('#cropLesson').src = p.crop_data_url;
+      document.querySelector('#cropSize').textContent = `${p.crop_size[0]} × ${p.crop_size[1]} pixels`;
+      document.querySelector('#tensorFacts').innerHTML = `
+        <span class="fact">forme [${p.tensor.shape.join(', ')}]</span>
+        <span class="fact">min ${p.tensor.minimum}</span>
+        <span class="fact">max ${p.tensor.maximum}</span>
+        <span class="fact">moyenne ${p.tensor.mean}</span>`;
+      drawEmbedding(p.embedding.values);
+      document.querySelector('#embeddingFacts').innerHTML = `
+        <span class="fact">${p.embedding.dimensions} dimensions</span>
+        <span class="fact">norme L2 = ${p.embedding.norm}</span>`;
+      document.querySelector('#vectorValues').textContent =
+        `12 premières valeurs : [${p.embedding.values.slice(0, 12).map(value => value.toFixed(5)).join(', ')}…]`;
+      document.querySelector('#neighbors').innerHTML = p.neighbors.map((item, index) => `
+        <div class="neighbor">
+          <img src="${item.image_url}" alt="Voisin ${index + 1} du catalogue">
+          <strong>${item.reference} · ${item.similarity.toFixed(4)}</strong>
+          <small>${item.specimen} · ${item.side}</small>
+        </div>`).join('');
+      const scores = p.neighbors.map(item => item.similarity.toFixed(4));
+      document.querySelector('#formula').textContent =
+        `(${scores.join(' + ')}) ÷ ${scores.length} = ${p.final_score.toFixed(4)} → ${data.winner}`;
+      pedagogy.classList.toggle('visible', pedagogyToggle.checked);
+      showStep(0);
+    }
+
+    async function analyzeCrop() {
+      if (!currentFile || !cropBox) return;
+      error.style.display = 'none';
+      result.style.display = 'none';
+      resultSide.classList.add('loading');
+      confirmCropButton.disabled = true;
+      confirmCropButton.textContent = 'Analyse en cours…';
+
+      const form = new FormData();
+      form.append('image', currentFile);
+      form.append('crop_x', Math.round(cropBox.x));
+      form.append('crop_y', Math.round(cropBox.y));
+      form.append('crop_width', Math.round(cropBox.size));
+      form.append('crop_height', Math.round(cropBox.size));
+      try {
+        const response = await fetch('/predict', { method: 'POST', body: form });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Analyse impossible.');
+        document.querySelector('#winner').textContent = data.winner;
+        document.querySelector('#ranking').innerHTML = data.ranking.map((item, index) => `
+          <li><span class="rank">${index + 1}</span><span class="reference">${item.reference}</span><span class="score">${item.score.toFixed(4)}</span></li>
+        `).join('');
+        document.querySelector('#margin').textContent = `Écart avec le deuxième candidat : ${data.margin.toFixed(4)}`;
+        fillPedagogy(data);
+        cropReview.style.display = 'none';
+        result.style.display = 'block';
+      } catch (problem) {
+        error.textContent = problem.message;
+        error.style.display = 'block';
+      } finally {
+        resultSide.classList.remove('loading');
+        confirmCropButton.disabled = false;
+        confirmCropButton.textContent = 'Confirmer et analyser';
+      }
+    }
+  </script>
+</body>
+</html>
