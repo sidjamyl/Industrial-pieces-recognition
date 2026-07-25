@@ -32,10 +32,9 @@ COPY artifacts/catalog2.pt ./artifacts/catalog2.pt
 RUN useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app /opt/torch-cache /opt/dinov2
 
-USER appuser
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
 
-CMD ["python", "app.py"]
+CMD ["sh", "-c", "mkdir -p /app/data/pending /app/artifacts && chown -R appuser:appuser /app/data/pending /app/artifacts && exec runuser -u appuser -- python app.py"]
