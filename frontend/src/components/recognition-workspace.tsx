@@ -279,7 +279,7 @@ export function RecognitionWorkspace({
                   <p className="mt-3 text-sm leading-6 text-white/60">
                     {stage === "detecting"
                       ? "Préparation d’une zone que vous pourrez vérifier avant l’analyse."
-                      : "DINOv2 transforme la photo puis classe les références les plus similaires."}
+                      : "le modele transforme la photo puis classe les références les plus similaires."}
                   </p>
                 </div>
               </motion.div>
