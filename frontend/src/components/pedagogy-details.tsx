@@ -101,7 +101,7 @@ export function PedagogyDetails({
               <Network className="size-[18px]" />
             </span>
             <div>
-              <p className="text-sm font-semibold">3 · Embedding DINOv2</p>
+              <p className="text-sm font-semibold">Le modèle transforme la photo puis classe les références les plus similaires.</p>
               <p className="mt-0.5 text-xs text-[var(--muted)]">
                 {detail.embedding.dimensions} dimensions · norme{" "}
                 {detail.embedding.norm}
