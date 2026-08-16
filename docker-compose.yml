@@ -31,8 +31,8 @@ services:
     restart: unless-stopped
     environment:
       API_URL: http://api:8000
-    ports:
-      - "${APP_PORT:-3000}:3000"
+    expose:
+      - "3000"
     depends_on:
       api:
         condition: service_healthy
