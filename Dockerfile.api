@@ -37,4 +37,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
 
-CMD ["sh", "-c", "mkdir -p /app/data/pending /app/artifacts && chown -R appuser:appuser /app/data/pending /app/artifacts && exec runuser -u appuser -- python app.py"]
+CMD ["sh", "-c", "mkdir -p /app/data/pending /app/artifacts && chown -R appuser:appuser /app/data/pending /app/artifacts && exec runuser --preserve-environment -u appuser -- python app.py"]
