@@ -5,6 +5,10 @@ services:
       context: .
       dockerfile: Dockerfile.api
     restart: unless-stopped
+    networks:
+      default:
+        aliases:
+          - image-recognition-api
     expose:
       - "8000"
     volumes:
@@ -30,7 +34,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      API_URL: http://api:8000
+      API_URL: http://image-recognition-api:8000
     expose:
       - "3000"
     depends_on:
